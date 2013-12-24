@@ -1,0 +1,102 @@
+<html>
+	<head>
+		<title>Halfway: Meet Me Halfway</title>
+		<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+		<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCAu1MArRTdCw7xPku4joZibrQ1LTxWNKU&amp;libraries=places&amp;sensor=false"></script>
+		<script type="text/javascript">
+			var map;
+			var service;
+
+			function initialize() {
+				var sydney = new google.maps.LatLng(-33.8670522, 151.1957362);
+				map = new google.maps.Map(document.getElementById('map'), {
+					center: sydney,
+					zoom: 15,
+				});
+
+				var request = {
+					location: sydney,
+					radius: '500',
+					types: ['food'],
+					rankBy: google.maps.places.RankBy.PROMINENCE,
+				};
+				service = new google.maps.places.PlacesService(map);
+
+				var possibilities = [];
+				service.nearbySearch(request, function callback(results, status) {
+					if (status == google.maps.places.PlacesServiceStatus.OK) {
+						var destinations = [];
+						for (var i = 0; i < Math.min(25, results.length); i++) {
+							var place = results[i];
+
+							var location = results[i].geometry.location;
+							var marker = new google.maps.Marker({
+								position: new google.maps.LatLng(location.nb, location.ob),
+								map: map,
+								name: results[i].name,
+							});
+
+							var locObj = {
+								name: results[i].name,
+								types: results[i].types,
+								lat: location.nb,
+								"long": location.ob,
+							};
+
+							destinations.push(new google.maps.LatLng(location.nb, location.ob));
+							possibilities.push(locObj);
+							$('#csv').append(JSON.stringify(locObj));
+						}
+
+						var service = new google.maps.DistanceMatrixService();
+						service.getDistanceMatrix({
+							origins: ["earlwood, new south wales, australia", "bradley's head road, mosman australia"],
+							destinations: destinations,
+							unitSystem: google.maps.UnitSystem.IMPERIAL,
+							travelMode: google.maps.TravelMode.DRIVING,
+							durationInTraffic: false,
+							avoidHighways: false,
+							avoidTolls: true,
+						}, function distanceMatrixGotten(response, status) {
+							if (status == google.maps.DistanceMatrixStatus.OK) {
+								// var origins = response.originAddresses;
+								// var destination_addresses = response.destinationAddresses;
+
+								// if (origins.length != 2) {
+								// 	return;
+								// }
+
+								// $('#csv').html('');
+								// console.log("wowe", response);
+
+								// var results = response.rows[0].elements;
+								
+								// for (var i = 0; i < results.length; i++) {
+								// 	var element = results[i];
+								// 	var distance = element.distance.value;
+								// 	var duration = element.duration.value;
+								// 	var to = destination_addresses[i];
+
+								// 	var destination = possibilities[i];
+								// 	destination.address = to;
+								// 	destination.distance = distance;
+								// 	destination.duration = duration;
+
+								// 	//$('#csv').append(JSON.stringify(destination));
+								// }
+
+								$('#csv').html(JSON.stringify({ 'locations': response}));
+							}
+						});
+					}
+				});
+			};
+
+			google.maps.event.addDomListener(window, 'load', initialize);
+		</script>
+	</head>
+	<body>
+		<div id="map" style="width: 500px; height: 500px; background-color: red;"></div>
+		<textarea id="csv"></textarea>
+	</body>
+</html>
