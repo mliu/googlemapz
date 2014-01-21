@@ -6,16 +6,32 @@
 		<script type="text/javascript">
 			var map;
 			var service;
+			var sydney;
 
 			function initialize() {
-				var sydney = new google.maps.LatLng(-33.8670522, 151.1957362);
+				sydney = new google.maps.LatLng(-33.8670522, 151.1957362);
 				map = new google.maps.Map(document.getElementById('map'), {
 					center: sydney,
 					zoom: 15,
 				});
+			}
+
+			function midpoint(addresses) {
+				return sydney; // TODO actually code this function
+			}
+
+			function addAddressBox() {
+				$('#addressBoxes').append($('<input type="text" class="address" placeholder="address">'));
+			}
+
+			function runMeetup() {
+				var addresses = [];
+				$('input.address').each(function(index, elem) {
+					addresses.push($(elem).val());
+				});
 
 				var request = {
-					location: sydney,
+					location: midpoint(addresses),
 					radius: '500',
 					types: ['food'],
 					rankBy: google.maps.places.RankBy.PROMINENCE,
@@ -30,8 +46,13 @@
 							var place = results[i];
 
 							var location = results[i].geometry.location;
+
+							// TODO following two lines are for debugging and should be examined whenever anything breaks
+							// console.log(location);
+							// console.log(new google.maps.LatLng(location.d, location.e));
+
 							var marker = new google.maps.Marker({
-								position: new google.maps.LatLng(location.nb, location.ob),
+								position: location,//new google.maps.LatLng(location.nb, location.ob),
 								map: map,
 								name: results[i].name,
 							});
@@ -39,19 +60,22 @@
 							var locObj = {
 								name: results[i].name,
 								types: results[i].types,
-								lat: location.nb,
-								"long": location.ob,
+								lat: location.d,
+								"long": location.e,
 							};
 
-							destinations.push(new google.maps.LatLng(location.nb, location.ob));
+							destinations.push(location);//new google.maps.LatLng(location.nb, location.ob));
 							possibilities.push(locObj);
 							$('#csv').append(JSON.stringify(locObj));
 						}
 
+						$('#csv').html(JSON.stringify({ 'destinations': destinations }));
+
 						var service = new google.maps.DistanceMatrixService();
+
 						service.getDistanceMatrix({
-							origins: ["earlwood, new south wales, australia", "bradley's head road, mosman australia"],
-							destinations: destinations,
+							origins: destinations,
+							destinations: addresses, // NOTE these two seem to be swapped, this is because google "mixes up" the rows and columns of the distance matrix
 							unitSystem: google.maps.UnitSystem.IMPERIAL,
 							travelMode: google.maps.TravelMode.DRIVING,
 							durationInTraffic: false,
@@ -85,7 +109,29 @@
 								// 	//$('#csv').append(JSON.stringify(destination));
 								// }
 
-								$('#csv').html(JSON.stringify({ 'locations': response}));
+								//$('#csv').html(JSON.stringify({ 'locations': response}));
+
+								var places = response.originAddresses;
+								var origins = response.destinationAddresses; // recall that the origins & destinations are switched because of the order of the google distance matrix result rows/columns
+
+								for (var i in response.rows) {
+									// each row corresponds to a different place where the users could meet up
+									var row = response.rows[i];
+									var address = places[i];
+									console.log(address);
+
+									var resultDiv = $('<div></div>').append(
+										$('<h1></h1>').html(address)
+										);
+
+									for (var n in row.elements) {
+										var element = row.elements[n];
+										resultDiv.append($('<p></p>').append(
+											element.duration.text, ' from ', origins[n]));
+									}
+
+									$('#results').append(resultDiv);
+								}
 							}
 						});
 					}
@@ -96,7 +142,16 @@
 		</script>
 	</head>
 	<body>
+		<div id="addresses">
+			<div id="addressBoxes">
+				<input type="text" class="address" value="earlwood, new south wales, australia">
+				<input type="text" class="address" value="bradley's head road, mosman, australia">
+			</div>
+			<button onclick="addAddressBox()">+</button>
+			<button onclick="runMeetup()">Find</button>
+		</div>
 		<div id="map" style="width: 500px; height: 500px; background-color: red;"></div>
 		<textarea id="csv"></textarea>
+		<div id="results"></div>
 	</body>
 </html>
