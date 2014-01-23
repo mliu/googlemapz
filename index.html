@@ -1,14 +1,21 @@
 <html>
 	<head>
 		<title>Halfway: Meet Me Halfway</title>
+
+		<link rel="stylesheet" type="text/css" href="select2.css" />
+
 		<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
 		<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCAu1MArRTdCw7xPku4joZibrQ1LTxWNKU&amp;libraries=places&amp;sensor=false"></script>
+		<script type="text/javascript" src="select2.js"></script>
 		<script type="text/javascript">
 			var map;
 			var service;
 			var sydney;
+			var geocoder;
+			var RADIUS = 1000;
 
 			function initialize() {
+				geocoder = new google.maps.Geocoder();
 				sydney = new google.maps.LatLng(-33.8670522, 151.1957362);
 				map = new google.maps.Map(document.getElementById('map'), {
 					center: sydney,
@@ -16,8 +23,65 @@
 				});
 			}
 
-			function midpoint(addresses) {
-				return sydney; // TODO actually code this function
+			// Recursively uses the google maps api to find coordinates for the given addresses then calculates the midpoint among them and calls runMeetup2.
+			function calcMidpoint(addresses, coordinates) {
+				if (addresses.length == 0) {
+					// Calculate midpoint
+					var x = 0;
+					var y = 0;
+
+					for (var i in coordinates) {
+						var pt = coordinates[i];
+						x += pt.d;
+						y += pt.e;
+					}
+
+					x /= coordinates.length;
+					y /= coordinates.length;
+
+					var midpoint = new google.maps.LatLng(x, y);
+					map.setCenter(midpoint);
+					var marker = new google.maps.Marker({
+					            map: map,
+					            position: midpoint
+					        });
+
+					var populationOptions = {
+				      strokeColor: '#FF0000',
+				      strokeOpacity: 0.8,
+				      strokeWeight: 2,
+				      fillColor: '#FF0000',
+				      fillOpacity: 0.35,
+				      map: map,
+				      center: midpoint,
+				      radius: RADIUS
+				    };
+				    // Add the circle for this city to the map.
+				    cityCircle = new google.maps.Circle(populationOptions);
+
+					runMeetup2(midpoint, coordinates);
+					return;
+				}
+
+				var address = addresses[0];
+				addresses = addresses.slice(1); // slice off the first element of addresses to call this recursively later
+
+				geocoder.geocode({ 'address': address}, function(results, status) {
+					if (status == google.maps.GeocoderStatus.OK) {
+
+						// todo remove the next two lines
+						map.setCenter(results[0].geometry.location);
+						var marker = new google.maps.Marker({
+						            map: map,
+						            position: results[0].geometry.location
+						        });
+
+						coordinates.push(results[0].geometry.location);
+						calcMidpoint(addresses, coordinates);
+					} else {
+						return null;
+					}
+				});
 			}
 
 			function addAddressBox() {
@@ -30,10 +94,16 @@
 					addresses.push($(elem).val());
 				});
 
+				calcMidpoint(addresses, []);
+			}
+
+			function runMeetup2(midpoint, addresses) {
+				var selectedTypes = $('#typesSelect').val().split(',');
+
 				var request = {
-					location: midpoint(addresses),
-					radius: '500',
-					types: ['food'],
+					location: midpoint,
+					radius: RADIUS, // TODO make this scale up if no results found on nearby search request.
+					types: selectedTypes,
 					rankBy: google.maps.places.RankBy.PROMINENCE,
 				};
 				service = new google.maps.places.PlacesService(map);
@@ -83,34 +153,6 @@
 							avoidTolls: true,
 						}, function distanceMatrixGotten(response, status) {
 							if (status == google.maps.DistanceMatrixStatus.OK) {
-								// var origins = response.originAddresses;
-								// var destination_addresses = response.destinationAddresses;
-
-								// if (origins.length != 2) {
-								// 	return;
-								// }
-
-								// $('#csv').html('');
-								// console.log("wowe", response);
-
-								// var results = response.rows[0].elements;
-								
-								// for (var i = 0; i < results.length; i++) {
-								// 	var element = results[i];
-								// 	var distance = element.distance.value;
-								// 	var duration = element.duration.value;
-								// 	var to = destination_addresses[i];
-
-								// 	var destination = possibilities[i];
-								// 	destination.address = to;
-								// 	destination.distance = distance;
-								// 	destination.duration = duration;
-
-								// 	//$('#csv').append(JSON.stringify(destination));
-								// }
-
-								//$('#csv').html(JSON.stringify({ 'locations': response}));
-
 								var places = response.originAddresses;
 								var origins = response.destinationAddresses; // recall that the origins & destinations are switched because of the order of the google distance matrix result rows/columns
 
@@ -139,16 +181,30 @@
 			};
 
 			google.maps.event.addDomListener(window, 'load', initialize);
+
+			var types_raw = ["accounting", "airport", "amusement_park", "aquarium", "art_gallery", "atm", "bakery", "bank", "bar", "beauty_salon", "bicycle_store", "book_store", "bowling_alley", "bus_station", "cafe", "campground", "car_dealer", "car_rental", "car_repair", "car_wash", "casino", "cemetery", "church", "city_hall", "clothing_store", "convenience_store", "courthouse", "dentist", "department_store", "doctor", "electrician", "electronics_store", "embassy", "establishment", "finance", "fire_station", "florist", "food", "funeral_home", "furniture_store", "gas_station", "general_contractor", "grocery_or_supermarket", "gym", "hair_care", "hardware_store", "health", "hindu_temple", "home_goods_store", "hospital", "insurance_agency", "jewelry_store", "laundry", "lawyer", "library", "liquor_store", "local_government_office", "locksmith", "lodging", "meal_delivery", "meal_takeaway", "mosque", "movie_rental", "movie_theater", "moving_company", "museum", "night_club", "painter", "park", "parking", "pet_store", "pharmacy", "physiotherapist", "place_of_worship", "plumber", "police", "post_office", "real_estate_agency", "restaurant", "roofing_contractor", "rv_park", "school", "shoe_store", "shopping_mall", "spa", "stadium", "storage", "store", "subway_station", "synagogue", "taxi_stand", "train_station", "travel_agency", "university", "veterinary_care", "zoo"];
+			var types = [];
+			for (var i in types_raw) {
+				var type = types_raw[i];
+				types.push({ id: type, text: type.replace(/_/g, ' ') });
+			}
+			
+			$(document).ready(function() {
+				$('#typesSelect').select2({ data: types, multiple: true });
+			});
 		</script>
 	</head>
 	<body>
 		<div id="addresses">
 			<div id="addressBoxes">
-				<input type="text" class="address" value="earlwood, new south wales, australia">
-				<input type="text" class="address" value="bradley's head road, mosman, australia">
+				<input type="text" class="address" value="marquette st, vienna, va">
+				<input type="text" class="address" value="kingsley road, vienna, va">
 			</div>
 			<button onclick="addAddressBox()">+</button>
 			<button onclick="runMeetup()">Find</button>
+		</div>
+		<div>
+			<input id="typesSelect" type="text" placeholder="Select types of locations" width="250" />
 		</div>
 		<div id="map" style="width: 500px; height: 500px; background-color: red;"></div>
 		<textarea id="csv"></textarea>
